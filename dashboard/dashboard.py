@@ -8,7 +8,8 @@ def draw(stdscr):
     stdscr.nodelay(True)
 
     while True:
-        if stdscr.getch() in (ord("q"), ord("Q")):
+        key = stdscr.getch()
+        if key in (ord("q"), ord("Q")):
             break
 
         best_bid = 10000 + random.randint(-3, 3)
