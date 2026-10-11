@@ -1,5 +1,6 @@
 import curses
 import time
+import random
 from datetime import datetime
 
 
@@ -12,14 +13,14 @@ def get_market_data():
     return {
         "available": True,
         "buy_orders": [
-            {"price": 10002, "quantity": 10, "order_id": "B101"},
-            {"price": 10001, "quantity": 15, "order_id": "B102"},
-            {"price": 10000, "quantity": 8, "order_id": "B103"},
+            {"price": 10002 + random.randint(-3,3), "quantity": 10, "order_id": "B101"},
+            {"price": 10001 + random.randint(-3,3),"quantity": 15, "order_id": "B102"},
+            {"price": 10000 + random.randint(-3,3),"quantity": 8, "order_id": "B103"},
         ],
         "sell_orders": [
-            {"price": 10003, "quantity": 12, "order_id": "S101"},
-            {"price": 10004, "quantity": 7, "order_id": "S102"},
-            {"price": 10005, "quantity": 20, "order_id": "S103"},
+            {"price": 10003 + random.randint(-3,3), "quantity": 12, "order_id": "S101"},
+            {"price": 10004 + random.randint(-3,3), "quantity": 7, "order_id": "S102"},
+            {"price": 10005 + random.randint(-3,3), "quantity": 20, "order_id": "S103"},
         ],
         "activity": [
             "BUY order B101 received",
