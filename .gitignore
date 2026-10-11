@@ -1,2 +1,8 @@
 *.ring
 __pycache__/
+
+# Generated Cython build files
+/build/
+ipc/order_wrapper.c
+*.pyd
+
