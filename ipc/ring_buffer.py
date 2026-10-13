@@ -73,6 +73,17 @@ class RingBuffer:
 
         offset = HEADER_SIZE + (tail % self.capacity) * self.record_size
         return memoryview(self._mm)[offset:offset + self.record_size]
+    
+    
+    def advance(self):
+        """Consume the next record without copying it. Return False if empty."""
+        tail = self._tail()
+        if self._head() == tail:
+            return False
+
+        struct.pack_into("<Q", self._mm, 8, tail + 1)
+        return True
+
 
     def pop(self):
         tail = self._tail()

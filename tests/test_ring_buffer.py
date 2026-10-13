@@ -68,3 +68,36 @@ def test_peek_view_is_zero_copy_and_does_not_consume(rb):
     popped = rb.pop()
     assert popped == record
     assert rb.is_empty()
+
+
+def test_advance_consumes_record_without_copying(tmp_path):
+    from ipc.ring_buffer import RingBuffer
+    from ipc.record import pack_order, BUY
+
+    rb = RingBuffer(str(tmp_path / "test.ring"), capacity=4)
+    try:
+        record = pack_order(1, 100, 10, BUY, 123)
+        assert rb.push(record)
+
+        view = rb.peek_view()
+        assert view is not None
+        assert bytes(view) == record
+
+        assert rb.advance() is True
+        assert rb.is_empty()
+        assert rb.peek_view() is None
+
+        del view
+    finally:
+        rb.close()
+
+
+def test_advance_returns_false_when_empty(tmp_path):
+    from ipc.ring_buffer import RingBuffer
+
+    rb = RingBuffer(str(tmp_path / "test.ring"), capacity=4)
+    try:
+        assert rb.advance() is False
+        assert rb.is_empty()
+    finally:
+        rb.close()
