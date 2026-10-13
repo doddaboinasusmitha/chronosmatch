@@ -1,3 +1,4 @@
+
 import pytest
 
 from ipc.record import BUY, pack_order, unpack_order
@@ -39,12 +40,31 @@ def test_wrap_around_keeps_order(rb):
     rb.pop()
     rb.push(order(5))
     rb.push(order(6))
+
     ids = []
     while not rb.is_empty():
         ids.append(unpack_order(rb.pop())["order_id"])
+
     assert ids == [3, 4, 5, 6]
 
 
 def test_wrong_size_record_rejected(rb):
     with pytest.raises(ValueError):
         rb.push(b"short")
+
+
+def test_peek_view_is_zero_copy_and_does_not_consume(rb):
+    record = order(1)
+    assert rb.push(record)
+
+    view = rb.peek_view()
+
+    assert isinstance(view, memoryview)
+    assert bytes(view) == record
+    assert len(rb) == 1
+
+    view.release()
+
+    popped = rb.pop()
+    assert popped == record
+    assert rb.is_empty()

@@ -65,6 +65,15 @@ class RingBuffer:
         struct.pack_into("<Q", self._mm, 0, head + 1)
         return True
 
+    def peek_view(self):
+        """Return a zero-copy view of the next record, or None if empty."""
+        tail = self._tail()
+        if self._head() == tail:
+            return None
+
+        offset = HEADER_SIZE + (tail % self.capacity) * self.record_size
+        return memoryview(self._mm)[offset:offset + self.record_size]
+
     def pop(self):
         tail = self._tail()
         if self._head() == tail:
