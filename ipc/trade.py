@@ -50,4 +50,3 @@ def unpack_trade(data):
         "buyer_id": buyer_id,
         "seller_id": seller_id,
     }
-
