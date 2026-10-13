@@ -23,3 +23,26 @@ The build configuration is provided in the root-level `setup.py` file.
 **Build status:** The Cython source was generated, but building the compiled extension requires Microsoft Visual C++ Build Tools 14.0 or later on Windows.
 
 **Testing:** The existing Python test suite passed all 9 tests. The Cython extension itself has not yet been built and tested successfully.
+
+## Trade Record Specification
+
+Fixed size: 64 bytes. Format string: "<QQIB3xQQQQ8x" (little-endian, no alignment padding).
+
+| Field       | Type   | Size | Byte offset |
+|-------------|--------|------|-------------|
+| order_id    | uint64 | 8    | 0 to 7      |
+| price       | uint64 | 8    | 8 to 15     |
+| quantity    | uint32 | 4    | 16 to 19    |
+| side        | uint8  | 1    | 20           |
+| padding     | -      | 3    | 21 to 23    |
+| timestamp_ns| uint64 | 8    | 24 to 31    |
+| trade_id    | uint64 | 8    | 32 to 39    |
+| buyer_id    | uint64 | 8    | 40 to 47    |
+| seller_id   | uint64 | 8    | 48 to 55    |
+| padding     | -      | 8    | 56 to 63    |
+
+Side: 0 = BUY, 1 = SELL
+
+The trade record is implemented in `ipc/trade.py`.
+`pack_trade()` encodes the fields into a fixed 64-byte record.
+`unpack_trade()` decodes the record and raises `ValueError` if the input length is not 64 bytes.
