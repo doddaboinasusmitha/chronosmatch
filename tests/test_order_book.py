@@ -40,3 +40,40 @@ def test_empty_order_book():
     assert book.get_best_bid() is None
     assert book.get_best_ask() is None
     assert book.get_snapshot() == {"bids": [], "asks": []}
+
+def test_partial_fill():
+    book = OrderBook()
+
+    book.add_order(pack_order(1, 10050, 10, SELL, 123))
+    trades = book.add_order(pack_order(2, 10050, 4, BUY, 124))
+
+    assert len(trades) == 1
+    assert trades[0].quantity == 4
+    assert trades[0].price == 10050
+    assert book.get_snapshot()["asks"] == [(10050, 6)]
+
+
+def test_fifo_at_same_price():
+    book = OrderBook()
+
+    book.add_order(pack_order(1, 10050, 2, SELL, 123))
+    book.add_order(pack_order(2, 10050, 3, SELL, 124))
+
+    trades = book.add_order(pack_order(3, 10050, 4, BUY, 125))
+
+    assert [t.sell_order_id for t in trades] == [1, 2]
+    assert [t.quantity for t in trades] == [2, 2]
+    assert book.get_snapshot()["asks"] == [(10050, 1)]
+
+
+def test_non_crossing_orders_do_not_trade():
+    book = OrderBook()
+
+    book.add_order(pack_order(1, 10100, 5, SELL, 123))
+    trades = book.add_order(pack_order(2, 10000, 3, BUY, 124))
+
+    assert trades == []
+    assert book.get_snapshot() == {
+        "bids": [(10000, 3)],
+        "asks": [(10100, 5)],
+    }
