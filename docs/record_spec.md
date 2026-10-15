@@ -22,7 +22,7 @@ The build configuration is provided in the root-level `setup.py` file.
 
 **Build status:** The Cython source was generated, but building the compiled extension requires Microsoft Visual C++ Build Tools 14.0 or later on Windows.
 
-**Testing:** The existing Python test suite passed all 9 tests. The Cython extension itself has not yet been built and tested successfully.
+**Testing:** The latest full Python test suite passed all 32 tests. The Cython extension itself has not yet been built and tested successfully.
 
 ## Trade Record Specification
 
