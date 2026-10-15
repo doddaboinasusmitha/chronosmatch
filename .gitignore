@@ -1,2 +1,7 @@
 *.ring
 __pycache__/
+
+stats.bin
+orders.ring
+trades.ring
+check.ring
