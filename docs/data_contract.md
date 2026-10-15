@@ -65,4 +65,48 @@ When the ring buffer is full, a new record must not overwrite an unread record. 
 ## 9. Data Consistency
 
 - All components must use the agreed record formats.
-- Record sizes must remain fixed at
+
+- Order records must remain fixed at 32 bytes.
+- Trade records must remain fixed at 64 bytes.
+- Any record format change must be reflected in the implementation and documentation.
+
+## 10. Stats Block Contract
+
+- **Implementation:** `ipc/stats.py`
+- **File:** `stats.bin`
+- **Purpose:** Stores shared trading statistics for readers such as monitoring or dashboard components.
+- **Total size:** 576 bytes (64 latency buckets x 8 bytes each).
+- **Magic:** `CHST`
+- **Version:** `1`
+
+### Header Layout
+
+The header uses the little-endian format `<4sIQQQQQQQ`.
+
+| Field | Type | Size |
+|---|---|---:|
+| Magic | 4-byte value | 4 bytes |
+| Version | Unsigned integer | 4 bytes |
+| Trades | Unsigned 64-bit integer | 8 bytes |
+| Orders | Unsigned 64-bit integer | 8 bytes |
+| Best bid | Unsigned 64-bit integer | 8 bytes |
+| Best ask | Unsigned 64-bit integer | 8 bytes |
+| Last trade price | Unsigned 64-bit integer | 8 bytes |
+| Last trade quantity | Unsigned 64-bit integer | 8 bytes |
+| Heartbeat timestamp | Unsigned 64-bit integer | 8 bytes |
+
+### Latency Buckets
+
+- The stats block contains 64 latency buckets.
+- Each bucket is an unsigned 64-bit integer (8 bytes).
+- Each bucket stores a counter.
+- Valid bucket indexes are `0` to `63`.
+- An invalid bucket index must raise `ValueError`.
+
+### Create and Attach Rules
+
+- The initializing component creates and initializes `stats.bin` using `create=True`.
+- Readers attach to the existing file using `create=False`.
+- The file must have the expected size, magic, and version.
+- Readers must not independently reset an active stats file.
+- The matching engine should be the only writer, as specified in `ipc/stats.py`.
