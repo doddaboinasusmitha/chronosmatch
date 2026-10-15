@@ -93,3 +93,30 @@ def test_writer_and_reader_share_stats(tmp_path):
         if reader is not None:
             reader.close()
         writer.close()
+
+
+def test_invalid_stats_file_size_raises_value_error(tmp_path):
+    path = tmp_path / "stats.bin"
+    path.write_bytes(b"invalid")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="Invalid stats.bin file size"):
+        StatsBlock(path=str(path), create=False)
+
+
+def test_invalid_stats_magic_raises_value_error(tmp_path):
+    import pytest
+    import struct
+
+    path = tmp_path / "stats.bin"
+    stats = StatsBlock(path=str(path), create=True)
+    stats.close()
+
+    # Corrupt the magic bytes without changing the file size.
+    with open(path, "r+b") as file:
+        file.write(b"BAD!")
+
+    with pytest.raises(ValueError, match="Invalid stats.bin magic or version"):
+        StatsBlock(path=str(path), create=False)
+
