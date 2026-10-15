@@ -1,5 +1,6 @@
 *.ring
 __pycache__/
+*.pyc
 
 stats.bin
 orders.ring
