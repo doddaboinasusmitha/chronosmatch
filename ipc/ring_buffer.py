@@ -15,6 +15,9 @@ class RingBuffer:
         if record_size <= 0:
             raise ValueError("record_size must be positive")
 
+        if create and capacity <= 0:
+            raise ValueError("capacity must be positive")
+
         self.record_size = record_size
 
         if create:

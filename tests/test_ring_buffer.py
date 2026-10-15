@@ -150,3 +150,22 @@ def test_attach_existing_buffer_preserves_records(tmp_path):
             reader.close()
     finally:
         writer.close()
+
+
+def test_zero_capacity_rejected(tmp_path):
+    with pytest.raises(ValueError, match="capacity must be positive"):
+        RingBuffer(str(tmp_path / "zero.ring"), capacity=0)
+
+
+def test_negative_capacity_rejected(tmp_path):
+    with pytest.raises(ValueError, match="capacity must be positive"):
+        RingBuffer(str(tmp_path / "negative.ring"), capacity=-1)
+
+
+def test_zero_record_size_rejected(tmp_path):
+    with pytest.raises(ValueError, match="record_size must be positive"):
+        RingBuffer(
+            str(tmp_path / "invalid.ring"),
+            capacity=4,
+            record_size=0,
+        )
