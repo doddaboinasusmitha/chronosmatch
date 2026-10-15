@@ -73,3 +73,23 @@ def test_invalid_latency_bucket_raises_value_error(tmp_path):
             stats.increment_latency_bucket(64)
     finally:
         stats.close()
+
+
+def test_writer_and_reader_share_stats(tmp_path):
+    path = tmp_path / "stats.bin"
+
+    writer = StatsBlock(path=str(path), create=True)
+    reader = None
+
+    try:
+        writer.update(trades=7, orders=12)
+
+        reader = StatsBlock(path=str(path), create=False)
+        snapshot = reader.snapshot()
+
+        assert snapshot["trades"] == 7
+        assert snapshot["orders"] == 12
+    finally:
+        if reader is not None:
+            reader.close()
+        writer.close()

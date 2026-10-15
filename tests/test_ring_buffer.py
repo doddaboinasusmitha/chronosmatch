@@ -101,3 +101,27 @@ def test_advance_returns_false_when_empty(tmp_path):
         assert rb.is_empty()
     finally:
         rb.close()
+
+def test_peek_view_matches_pop_and_uses_mmap(tmp_path):
+    rb = RingBuffer(str(tmp_path / "test.ring"), capacity=4)
+    view = None
+
+    try:
+        record = order(1)
+        assert rb.push(record)
+
+        view = rb.peek_view()
+        assert view is not None
+        assert bytes(view) == record
+        assert view.obj is rb._mm
+
+        view.release()
+        view = None
+
+        popped = rb.pop()
+        assert popped == record
+        assert rb.is_empty()
+    finally:
+        if view is not None:
+            view.release()
+        rb.close()
