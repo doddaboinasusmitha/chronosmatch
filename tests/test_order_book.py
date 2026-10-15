@@ -77,3 +77,63 @@ def test_non_crossing_orders_do_not_trade():
         "bids": [(10000, 3)],
         "asks": [(10100, 5)],
     }
+
+
+
+
+def test_buy_matches_best_ask_first_across_price_levels():
+    book = OrderBook()
+    book.add_order(pack_order(1, 10100, 3, SELL, 1))
+    book.add_order(pack_order(2, 10000, 2, SELL, 2))
+
+    trades = book.add_order(pack_order(3, 10200, 4, BUY, 3))
+
+    assert [(t.sell_order_id, t.price, t.quantity) for t in trades] == [
+        (2, 10000, 2),
+        (1, 10100, 2),
+    ]
+    assert book.get_snapshot()["asks"] == [(10100, 1)]
+
+
+def test_sell_matches_highest_bid_first():
+    book = OrderBook()
+    book.add_order(pack_order(1, 10000, 2, BUY, 1))
+    book.add_order(pack_order(2, 10100, 3, BUY, 2))
+
+    trades = book.add_order(pack_order(3, 9900, 4, SELL, 3))
+
+    assert [(t.buy_order_id, t.price, t.quantity) for t in trades] == [
+        (2, 10100, 3),
+        (1, 10000, 1),
+    ]
+    assert book.get_snapshot()["bids"] == [(10000, 1)]
+
+
+def test_zero_quantity_is_rejected():
+    book = OrderBook()
+
+    try:
+        book.add_order(pack_order(1, 10000, 0, BUY, 1))
+        assert False, "Expected ValueError for zero quantity"
+    except ValueError as exc:
+        assert "quantity" in str(exc).lower()
+
+
+def test_zero_price_is_rejected():
+    book = OrderBook()
+
+    try:
+        book.add_order(pack_order(1, 0, 1, BUY, 1))
+        assert False, "Expected ValueError for zero price"
+    except ValueError as exc:
+        assert "price" in str(exc).lower()
+
+
+def test_invalid_order_side_is_rejected():
+    book = OrderBook()
+
+    try:
+        book.add_order(pack_order(1, 10000, 1, 2, 1))
+        assert False, "Expected ValueError for invalid side"
+    except ValueError as exc:
+        assert "side" in str(exc).lower()
