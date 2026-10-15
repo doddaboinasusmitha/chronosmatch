@@ -125,3 +125,28 @@ def test_peek_view_matches_pop_and_uses_mmap(tmp_path):
         if view is not None:
             view.release()
         rb.close()
+
+
+def test_attach_existing_buffer_preserves_records(tmp_path):
+    path = str(tmp_path / "shared.ring")
+    writer = RingBuffer(path, capacity=4)
+
+    try:
+        record = order(1)
+        assert writer.push(record)
+
+        reader = RingBuffer(
+            path,
+            capacity=4,
+            create=False,
+            record_size=32,
+        )
+
+        try:
+            assert len(reader) == 1
+            assert reader.pop() == record
+            assert reader.is_empty()
+        finally:
+            reader.close()
+    finally:
+        writer.close()
