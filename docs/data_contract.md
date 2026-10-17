@@ -110,3 +110,19 @@ The header uses the little-endian format `<4sIQQQQQQQ`.
 - The file must have the expected size, magic, and version.
 - Readers must not independently reset an active stats file.
 - The matching engine should be the only writer, as specified in `ipc/stats.py`.
+## 11. Week 1–2 Freeze Verification
+
+### Verified
+- Order records use the 32-byte format `<QQIB3xQ`.
+- Trade records use the 64-byte format `<QQIB3xQQQQ8x`.
+- The stats header is 64 bytes, followed by 64 latency buckets of 8 bytes each.
+- Total stats block size is 576 bytes.
+- The simulator successfully sent and received 200,000 orders in the verification run.
+- The full Python test suite passed: 35 tests.
+
+### Pending
+- End-to-end integration between the simulator, matching engine, and dashboard has not yet been verified.
+- The dashboard directory currently contains only a README file.
+- The engine directory currently contains `ledger.py` and `test_ledger.py`; a complete matching-engine entry point has not been identified.
+
+The Week 1–2 freeze is not fully complete until the missing integration components and their interfaces are verified.
