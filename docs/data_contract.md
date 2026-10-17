@@ -118,7 +118,7 @@ The header uses the little-endian format `<4sIQQQQQQQ`.
 - The stats header is 64 bytes, followed by 64 latency buckets of 8 bytes each.
 - Total stats block size is 576 bytes.
 - The simulator successfully sent and received 200,000 orders in the verification run.
-- The full Python test suite passed: 35 tests.
+- The full Python test suite passed: 39 tests.
 
 ### Pending
 - End-to-end integration between the simulator, matching engine, and dashboard has not yet been verified.
