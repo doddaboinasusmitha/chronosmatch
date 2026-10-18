@@ -1,8 +1,9 @@
 
 import time
 
+from engine.metrics import calculate_latency_ns, latency_bucket_index
 from engine.order_book import OrderBook
-from ipc.record import BUY, SELL
+from ipc.record import BUY, SELL, unpack_order
 from ipc.trade import pack_trade, TRADE_SIZE
 
 
@@ -19,13 +20,19 @@ class MatchingEngine:
         """Match one packed order and publish its resulting trades."""
         order_count = self.stats.snapshot()["orders"] + 1
 
+        order = unpack_order(order_data)
+        latency_ns = calculate_latency_ns(order["timestamp_ns"])
+
+        if latency_ns is not None:
+            bucket_index = latency_bucket_index(latency_ns)
+            self.stats.increment_latency_bucket(bucket_index)
+
         trades = self.order_book.add_order(order_data)
 
         for trade in trades:
             self.trade_id += 1
             timestamp_ns = time.time_ns()
 
-            # The order IDs identify the buyer and seller.
             # Use the buyer ID as the record's order_id and BUY as side.
             record = pack_trade(
                 trade.buy_order_id,
