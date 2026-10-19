@@ -141,3 +141,62 @@ class StatsBlock:
         if getattr(self, "_file", None) is not None:
             self._file.close()
             self._file = None
+
+
+class StatsReader:
+    """Read shared engine statistics without modifying the file."""
+
+    def __init__(self, path="stats.bin"):
+        if os.path.getsize(path) != STATS_SIZE:
+            raise ValueError("Invalid stats.bin file size")
+
+        self.path = path
+        self._file = open(path, "rb")
+        try:
+            self._mm = mmap.mmap(
+                self._file.fileno(),
+                STATS_SIZE,
+                access=mmap.ACCESS_READ,
+            )
+
+            values = struct.unpack(
+                HEADER_FORMAT, self._mm[:HEADER_SIZE]
+            )
+            if values[0] != MAGIC or values[1] != VERSION:
+                raise ValueError("Invalid stats.bin magic or version")
+        except Exception:
+            if hasattr(self, "_mm"):
+                self._mm.close()
+            self._file.close()
+            raise
+
+    def snapshot(self):
+        values = struct.unpack(
+            HEADER_FORMAT, self._mm[:HEADER_SIZE]
+        )
+        buckets = struct.unpack(
+            BUCKET_FORMAT, self._mm[HEADER_SIZE:]
+        )
+
+        return {
+            "version": values[1],
+            "trades": values[2],
+            "orders": values[3],
+            "best_bid": values[4],
+            "best_ask": values[5],
+            "last_trade_price": values[6],
+            "last_trade_quantity": values[7],
+            "heartbeat_ns": values[8],
+            "latency_buckets": list(buckets),
+        }
+
+    def close(self):
+        self._mm.close()
+        self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
