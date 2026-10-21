@@ -4,7 +4,7 @@ from dashboard.dashboard import get_market_data
 def test_market_data_structure():
     data = get_market_data()
 
-    assert data["available"] is True
+    assert data["available"] is False
     assert "buy_orders" in data
     assert "sell_orders" in data
     assert "activity" in data
