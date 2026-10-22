@@ -17,3 +17,12 @@ def test_market_data_orders_have_required_fields():
         assert "price" in order
         assert "quantity" in order
         assert "order_id" in order
+
+
+def test_dashboard_shows_engine_not_responding_without_live_data():
+    data = get_market_data()
+
+    assert data["available"] is False
+    assert data["engine_status"] == "NOT RESPONDING"
+    assert data["orders_per_second"] == 0.0
+    assert data["last_trade"] == "Last trade: waiting for trade"
