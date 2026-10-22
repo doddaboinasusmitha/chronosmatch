@@ -1,8 +1,25 @@
-# chronosmatch
-Zero Copy High Frequency Trading Engine
+Running the Project
 
-## Ring Buffer Layout
-- File: memory-mapped with `mmap`, header of 64 bytes, then fixed 32-byte order records.
-- Header: head counter (bytes 0-7), tail counter (bytes 8-15), capacity (bytes 16-23).
-- Slot index = counter % capacity. Full when head - tail == capacity, empty when head == tail.
-- Producer writes at head, consumer reads at tail. No serialization (no pickle/JSON).
+Run the following commands from the ChronosMatch repository root.
+
+1. Create a virtual environment
+
+python -m venv .venv
+
+2. Activate the environment (Windows PowerShell)
+
+.\.venv\Scripts\Activate.ps1
+
+3. Install dependencies
+
+python -m pip install -r requirements.txt
+
+4. Run the automated tests
+
+python -m pytest -q
+
+5. Dashboard
+
+See "dashboard/README.md" for dashboard-specific instructions.
+
+A complete live demonstration requires the relevant project components to be integrated and running.gir 
