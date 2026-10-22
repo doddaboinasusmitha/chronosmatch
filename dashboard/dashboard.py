@@ -1,4 +1,3 @@
-
 """Read-only ChronosMatch statistics dashboard."""
 
 import time
@@ -58,6 +57,7 @@ def get_market_data(path="stats.bin"):
 def safe_addstr(window, y, x, text):
     """Avoid writing beyond the visible terminal area."""
     height, width = window.getmaxyx()
+
     if 0 <= y < height and 0 <= x < width - 1:
         try:
             window.addnstr(y, x, str(text), width - x - 1)
@@ -66,8 +66,9 @@ def safe_addstr(window, y, x, text):
 
 
 def draw(stdscr):
+    """Main terminal dashboard loop. Press Q to quit."""
     curses.curs_set(0)
-    stdscr.timeout(500)
+    stdscr.nodelay(True)
 
     while True:
         key = stdscr.getch()
@@ -84,29 +85,36 @@ def draw(stdscr):
                 "Enlarge the terminal. Press Q to quit."
             )
             stdscr.refresh()
+            time.sleep(0.2)
             continue
 
         try:
             data = get_market_data()
-        except (OSError, ValueError) as exc:
-            safe_addstr(stdscr, 3, 2, f"Waiting for valid stats.bin: {exc}")
+        except (OSError, ValueError, KeyError) as exc:
+            safe_addstr(
+                stdscr, 3, 2,
+                f"Waiting for valid stats.bin: {exc}"
+            )
             safe_addstr(stdscr, height - 1, 2, "Press Q to quit")
             stdscr.refresh()
+            time.sleep(0.2)
             continue
 
         age = data["heartbeat_age_ns"]
-        status = (
-            "NO HEARTBEAT" if age is None
-            else "LIVE" if age < 5_000_000_000
-            else "STALE"
-        )
+
+        if age is None:
+            status = "NO HEARTBEAT"
+        elif age < 5_000_000_000:
+            status = "LIVE"
+        else:
+            status = "STALE"
 
         spread = data["spread"]
         p50 = data["p50_latency_ns"]
         p99 = data["p99_latency_ns"]
 
         lines = [
-            f"System: {status}",
+            f"System:           {status}",
             f"Orders processed: {data['orders']}",
             f"Trades executed:  {data['trades']}",
             f"Best bid:         {data['best_bid'] or 'N/A'}",
@@ -125,13 +133,15 @@ def draw(stdscr):
             safe_addstr(stdscr, index, 2, line)
 
         stdscr.refresh()
+        time.sleep(0.2)
 
 
 if __name__ == "__main__":
     if curses is None:
         print(
             "Terminal dashboard needs curses support. "
-            "On Windows, install it with: python -m pip install windows-curses"
+            "On Windows, install it with: "
+            "python -m pip install windows-curses"
         )
     else:
         try:
