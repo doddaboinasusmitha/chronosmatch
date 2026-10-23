@@ -1,3 +1,4 @@
+import pytest
 import os
 import sqlite3
 import tempfile
@@ -93,3 +94,19 @@ def test_restart_does_not_duplicate_saved_trades():
             ).fetchone()[0]
 
         assert count == 1
+
+def test_database_failure_does_not_lose_trade():
+    with tempfile.TemporaryDirectory() as folder:
+        ring_path = os.path.join(folder, "trades.ring")
+        ring = RingBuffer(ring_path, capacity=10, record_size=TRADE_SIZE)
+
+        try:
+            record = pack_trade(1, 1000, 2, 0, 123456, 99, 10, 20)
+            assert ring.push(record)
+
+            with pytest.raises(sqlite3.OperationalError):
+                process_batch(ring, folder, batch_size=10)
+
+            assert len(ring) == 1
+        finally:
+            ring.close()

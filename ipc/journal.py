@@ -24,35 +24,45 @@ def initialize_database(db_path=DEFAULT_DB_PATH):
         """)
 
 def process_batch(ring, db_path=DEFAULT_DB_PATH, batch_size=DEFAULT_BATCH_SIZE):
-    """Read a batch of trades from the ring and save them to SQLite."""
+    """Save each trade before consuming it from the ring."""
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
 
-    batch = []
-
-    for _ in range(batch_size):
-        record = ring.pop()
-        if record is None:
-            break
-        batch.append(unpack_trade(record))
-
-    if not batch:
+    if ring.is_empty():
         return 0
 
     initialize_database(db_path)
+    processed = 0
 
     with closing(sqlite3.connect(db_path)) as connection:
-        connection.executemany("""
-            INSERT OR IGNORE INTO trades (
-                trade_id, order_id, price, quantity, side,
-                timestamp_ns, buyer_id, seller_id
-            ) VALUES (
-                :trade_id, :order_id, :price, :quantity, :side,
-                :timestamp_ns, :buyer_id, :seller_id
-            )
-        """, batch)
-        connection.commit()
-    return len(batch)
+        while processed < batch_size:
+            view = ring.peek_view()
+            if view is None:
+                break
+
+            try:
+                trade = unpack_trade(view)
+            finally:
+                view.release()
+
+            connection.execute("""
+                INSERT OR IGNORE INTO trades (
+                    trade_id, order_id, price, quantity, side,
+                    timestamp_ns, buyer_id, seller_id
+                ) VALUES (
+                    :trade_id, :order_id, :price, :quantity, :side,
+                    :timestamp_ns, :buyer_id, :seller_id
+                )
+            """, trade)
+            connection.commit()
+
+            if not ring.advance():
+                raise RuntimeError("Trade disappeared before consumption")
+
+            processed += 1
+
+    return processed
+
 
 def run_journal(
     ring_path="trades.ring",
