@@ -5,4 +5,7 @@ __pycache__/
 stats.bin
 orders.ring
 trades.ring
+build/
+engine/book_core.c
+engine/*.pyd
 check.ring
