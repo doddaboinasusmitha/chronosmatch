@@ -6,22 +6,45 @@ from ipc.ring_buffer import RingBuffer
 from simulator.order_generator import OrderGenerator
 from ipc.trade import TRADE_SIZE, unpack_trade
 from ipc.stats import StatsBlock
-from engine.order_book import OrderBook
+from ipc.journal import process_batch
+from engine.book_adapter import create_order_book
 from engine.matching_engine import MatchingEngine
 
 
-async def run(count=1000, rate=1000, seed=None, ring="orders.ring"):
+async def run(
+    count=1000,
+    rate=1000,
+    seed=None,
+    ring="orders.ring",
+    trade_ring="trades.ring",
+    stats_file="stats.bin",
+    journal_db=None,
+):
+    if count < 0:
+        raise ValueError("count must be zero or greater")
+    if rate < 0:
+        raise ValueError("rate cannot be negative")
+
     order_buffer = RingBuffer(ring, capacity=100000)
-    generator = OrderGenerator(seed=seed)
-    trade_buffer = RingBuffer(
-        "trades.ring",
-        capacity=100000,
-        record_size=TRADE_SIZE,
-    )
-    stats = StatsBlock("stats.bin", create=True)
+    trade_buffer = None
+    stats = None
 
     try:
-        engine = MatchingEngine(OrderBook(), trade_buffer, stats)
+        generator = OrderGenerator(seed=seed)
+
+        trade_buffer = RingBuffer(
+            trade_ring,
+            capacity=100000,
+            record_size=TRADE_SIZE,
+        )
+        stats = StatsBlock(stats_file, create=True)
+
+        engine = MatchingEngine(
+            create_order_book(),
+            trade_buffer,
+            stats,
+        )
+
         sent = 0
         interval = 1 / rate if rate > 0 else 0
         loop = asyncio.get_running_loop()
@@ -51,15 +74,26 @@ async def run(count=1000, rate=1000, seed=None, ring="orders.ring"):
                 processed += 1
 
         trade_count = 0
-        while not trade_buffer.is_empty():
-            record = trade_buffer.pop()
-            if record is not None:
-                trade = unpack_trade(record)
-                trade_count += 1
-                if trade_count <= 5:
-                    print("Trade:", trade)
+
+        if journal_db is not None:
+            trade_count = process_batch(
+                trade_buffer,
+                db_path=journal_db,
+                batch_size=100000,
+            )
+            print("Trades saved to SQLite:", trade_count)
+        else:
+            while not trade_buffer.is_empty():
+                record = trade_buffer.pop()
+                if record is not None:
+                    trade = unpack_trade(record)
+                    trade_count += 1
+
+                    if trade_count <= 5:
+                        print("Trade:", trade)
 
         snapshot = stats.snapshot()
+
         print("\n--- ChronosMatch Results ---")
         print("Orders generated:", sent)
         print("Orders processed:", processed)
@@ -71,8 +105,12 @@ async def run(count=1000, rate=1000, seed=None, ring="orders.ring"):
 
     finally:
         order_buffer.close()
-        trade_buffer.close()
-        stats.close()
+
+        if trade_buffer is not None:
+            trade_buffer.close()
+
+        if stats is not None:
+            stats.close()
 
 
 def main():
@@ -83,11 +121,19 @@ def main():
     parser.add_argument("--rate", type=float, default=1000)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--ring", default="orders.ring")
+    parser.add_argument("--trade-ring", default="trades.ring")
+    parser.add_argument("--stats-file", default="stats.bin")
+    parser.add_argument(
+        "--journal-db",
+        default=None,
+        help="Optional SQLite database path for saving trades",
+    )
 
     args = parser.parse_args()
 
     if args.count < 0:
         parser.error("--count must be zero or greater")
+
     if args.rate < 0:
         parser.error("--rate cannot be negative")
 
@@ -97,6 +143,9 @@ def main():
             rate=args.rate,
             seed=args.seed,
             ring=args.ring,
+            trade_ring=args.trade_ring,
+            stats_file=args.stats_file,
+            journal_db=args.journal_db,
         )
     )
 
