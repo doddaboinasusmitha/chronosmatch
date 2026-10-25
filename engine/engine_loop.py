@@ -5,7 +5,7 @@ import argparse
 import time
 
 from engine.matching_engine import MatchingEngine
-from engine.order_book import OrderBook
+from engine.book_adapter import create_order_book
 from ipc.ring_buffer import RingBuffer
 from ipc.stats import StatsBlock
 from ipc.trade import TRADE_SIZE
@@ -35,7 +35,7 @@ def run_engine(
         )
         stats = StatsBlock(stats_file, create=False)
 
-        engine = MatchingEngine(OrderBook(), trades, stats)
+        engine = MatchingEngine(create_order_book(), trades, stats)
         processed = 0
         last_activity = time.monotonic()
 
