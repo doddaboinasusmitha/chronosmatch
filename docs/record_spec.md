@@ -20,9 +20,9 @@ It accepts an existing order record in bytes format and checks that its length m
 
 The build configuration is provided in the root-level `setup.py` file.
 
-**Build status:** The Cython source was generated, but building the compiled extension requires Microsoft Visual C++ Build Tools 14.0 or later on Windows.
+**Build status:** The Cython order wrapper imports successfully in the current environment. The compiled extension build process has not been independently verified in this update.
 
-**Testing:** The latest full Python test suite passed all 32 tests. The Cython extension itself has not yet been built and tested successfully.
+**Testing:** The full Python test suite passed all 45 tests. Two dedicated order-wrapper tests passed, covering valid 32-byte record decoding and invalid-length handling.
 
 ## Trade Record Specification
 
