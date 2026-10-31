@@ -4,8 +4,7 @@
 from libc.stdlib cimport calloc, free
 from libc.stddef cimport size_t
 from libc.stdint cimport uint64_t
-from libc.stdint cimport uint32_t
-from libc.stdint cimport uint8_t
+from libc.limits cimport INT_MAX
 
 
 cdef struct OrderNode:
@@ -27,8 +26,8 @@ cdef class BookCore:
         self.bid_tails = NULL
         self.ask_tails = NULL
 
-        if max_price < 1:
-            raise ValueError("max_price must be positive")
+        if max_price < 1 or max_price == INT_MAX:
+            raise ValueError("max_price must be between 1 and INT_MAX - 1")
 
         self.max_price = max_price
 

@@ -14,6 +14,12 @@ setup(
     name="chronosmatch-core",
     ext_modules=cythonize(
         extensions,
-        compiler_directives={"language_level": "3"},
+        compiler_directives={
+            "language_level": "3",
+            "boundscheck": True,
+            "wraparound": False,
+            "initializedcheck": True,
+            "nonecheck": True,
+        },
     ),
 )

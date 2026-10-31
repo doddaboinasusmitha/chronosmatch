@@ -85,3 +85,19 @@ def test_invalid_orders_are_rejected(side, price, quantity):
 
     with pytest.raises(ValueError):
         book.add_order(side, price, quantity, 1)
+
+
+@pytest.mark.parametrize("max_price", [0, -1, 2147483647])
+def test_invalid_max_price_is_rejected(max_price):
+    with pytest.raises(ValueError):
+        BookCore(max_price)
+
+
+def test_book_core_repeated_allocation_and_cleanup():
+    for order_id in range(250):
+        book = BookCore(100)
+        book.add_order(0, 50, 2, order_id)
+        book.add_order(1, 60, 3, order_id + 1000)
+        assert book.quantity_at(0, 50) == 2
+        assert book.quantity_at(1, 60) == 3
+        del book
