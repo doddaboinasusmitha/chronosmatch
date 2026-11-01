@@ -1,16 +1,12 @@
-
 import mmap
 import os
 import struct
 import time
 
-# Stats block layout: fixed-size header + 64 latency buckets
 MAGIC = b"CHST"
 VERSION = 1
 LATENCY_BUCKETS = 64
 
-# magic, version, trades, orders, best bid, best ask,
-# last trade price, last trade quantity, heartbeat_ns
 HEADER_FORMAT = "<4sIQQQQQQQ"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 BUCKET_FORMAT = "<" + ("Q" * LATENCY_BUCKETS)
@@ -19,7 +15,7 @@ STATS_SIZE = HEADER_SIZE + BUCKET_SIZE
 
 
 class StatsBlock:
-    """Shared stats file. The engine should be the only writer."""
+    """Shared statistics file. The engine should be the only writer."""
 
     def __init__(self, path="stats.bin", create=False):
         self.path = path
@@ -84,22 +80,18 @@ class StatsBlock:
         self._mm[HEADER_SIZE:] = struct.pack(BUCKET_FORMAT, *buckets)
 
     def snapshot(self):
-        (
-            magic, version, trades, orders, best_bid, best_ask,
-            last_trade_price, last_trade_quantity, heartbeat_ns
-        ) = self._read_header()
-
+        values = self._read_header()
         buckets = struct.unpack(BUCKET_FORMAT, self._mm[HEADER_SIZE:])
 
         return {
-            "version": version,
-            "trades": trades,
-            "orders": orders,
-            "best_bid": best_bid,
-            "best_ask": best_ask,
-            "last_trade_price": last_trade_price,
-            "last_trade_quantity": last_trade_quantity,
-            "heartbeat_ns": heartbeat_ns,
+            "version": values[1],
+            "trades": values[2],
+            "orders": values[3],
+            "best_bid": values[4],
+            "best_ask": values[5],
+            "last_trade_price": values[6],
+            "last_trade_quantity": values[7],
+            "heartbeat_ns": values[8],
             "latency_buckets": list(buckets),
         }
 
@@ -138,6 +130,74 @@ class StatsBlock:
         if getattr(self, "_mm", None) is not None:
             self._mm.close()
             self._mm = None
+
         if getattr(self, "_file", None) is not None:
             self._file.close()
             self._file = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+
+class StatsReader:
+    """Read shared engine statistics without modifying the file."""
+
+    def __init__(self, path="stats.bin"):
+        if os.path.getsize(path) != STATS_SIZE:
+            raise ValueError("Invalid stats.bin file size")
+
+        self.path = path
+        self._file = open(path, "rb")
+
+        try:
+            self._mm = mmap.mmap(
+                self._file.fileno(),
+                STATS_SIZE,
+                access=mmap.ACCESS_READ,
+            )
+
+            values = struct.unpack(
+                HEADER_FORMAT, self._mm[:HEADER_SIZE]
+            )
+
+            if values[0] != MAGIC or values[1] != VERSION:
+                raise ValueError("Invalid stats.bin magic or version")
+
+        except Exception:
+            if hasattr(self, "_mm"):
+                self._mm.close()
+            self._file.close()
+            raise
+
+    def snapshot(self):
+        values = struct.unpack(
+            HEADER_FORMAT, self._mm[:HEADER_SIZE]
+        )
+        buckets = struct.unpack(
+            BUCKET_FORMAT, self._mm[HEADER_SIZE:]
+        )
+
+        return {
+            "version": values[1],
+            "trades": values[2],
+            "orders": values[3],
+            "best_bid": values[4],
+            "best_ask": values[5],
+            "last_trade_price": values[6],
+            "last_trade_quantity": values[7],
+            "heartbeat_ns": values[8],
+            "latency_buckets": list(buckets),
+        }
+
+    def close(self):
+        self._mm.close()
+        self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()

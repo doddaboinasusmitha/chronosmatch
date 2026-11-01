@@ -48,3 +48,46 @@ def test_wrap_around_keeps_order(rb):
 def test_wrong_size_record_rejected(rb):
     with pytest.raises(ValueError):
         rb.push(b"short")
+
+
+from ipc.trade import TRADE_SIZE, pack_trade
+
+
+def test_ring_buffer_supports_trade_record_size(tmp_path):
+    path = tmp_path / "trade_ring.bin"
+
+    ring = RingBuffer(
+        str(path),
+        capacity=4,
+        create=True,
+        record_size=TRADE_SIZE,
+    )
+
+    record = pack_trade(1, 10050, 100, 0, 123456789, 10, 20, 30)
+
+    try:
+        assert ring.push(record) is True
+        assert ring.pop() == record
+    finally:
+        ring.close()
+
+
+def test_peek_view_and_advance(tmp_path):
+    path = tmp_path / "view_ring.bin"
+    ring = RingBuffer(str(path), capacity=4, create=True)
+
+    record = pack_order(1, 10050, 10, BUY, 123456789)
+
+    try:
+        assert ring.push(record) is True
+
+        view = ring.peek_view()
+        assert view is not None
+        assert bytes(view) == record
+
+        view.release()
+
+        assert ring.advance() is True
+        assert ring.pop() is None
+    finally:
+        ring.close()

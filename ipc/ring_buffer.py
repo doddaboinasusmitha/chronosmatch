@@ -3,18 +3,16 @@ import struct
 
 from ipc.record import ORDER_SIZE
 
-# Header: head counter, tail counter, capacity
 HEADER_FORMAT = "<QQQ"
 HEADER_SIZE = 64
 
 
 class RingBuffer:
-    """Single-producer, single-consumer ring buffer using a memory-mapped file."""
+    """Single-producer, single-consumer memory-mapped ring buffer."""
 
     def __init__(self, path, capacity=1024, create=True, record_size=ORDER_SIZE):
         if capacity < 1:
             raise ValueError("Capacity must be at least 1")
-
         if record_size < 1:
             raise ValueError("Record size must be at least 1")
 
@@ -25,23 +23,32 @@ class RingBuffer:
                 file.truncate(HEADER_SIZE + capacity * record_size)
 
         self._file = open(path, "r+b")
-        self._mm = mmap.mmap(self._file.fileno(), 0)
 
-        if create:
-            struct.pack_into(
-                HEADER_FORMAT, self._mm, 0, 0, 0, capacity
-            )
+        try:
+            self._mm = mmap.mmap(self._file.fileno(), 0)
 
-        self.capacity = struct.unpack_from("<Q", self._mm, 16)[0]
+            if create:
+                struct.pack_into(
+                    HEADER_FORMAT, self._mm, 0, 0, 0, capacity
+                )
 
-        expected_size = HEADER_SIZE + self.capacity * self.record_size
+            self.capacity = struct.unpack_from("<Q", self._mm, 16)[0]
 
-        if len(self._mm) != expected_size:
-            self._mm.close()
+            if self.capacity < 1:
+                raise ValueError("Invalid ring buffer capacity")
+
+            expected_size = HEADER_SIZE + self.capacity * self.record_size
+
+            if len(self._mm) != expected_size:
+                raise ValueError(
+                    f"Buffer size mismatch: expected {expected_size} bytes"
+                )
+
+        except Exception:
+            if hasattr(self, "_mm"):
+                self._mm.close()
             self._file.close()
-            raise ValueError(
-                f"Buffer size mismatch: expected {expected_size} bytes"
-            )
+            raise
 
     def _head(self):
         return struct.unpack_from("<Q", self._mm, 0)[0]
@@ -72,43 +79,44 @@ class RingBuffer:
             return False
 
         offset = HEADER_SIZE + (head % self.capacity) * self.record_size
-
         self._mm[offset:offset + self.record_size] = record
         struct.pack_into("<Q", self._mm, 0, head + 1)
 
         return True
 
     def peek_view(self):
-        """Read the next record without removing it."""
+        """Return a zero-copy memoryview of the next record."""
         tail = self._tail()
 
         if self._head() == tail:
             return None
 
         offset = HEADER_SIZE + (tail % self.capacity) * self.record_size
-
-        return bytes(self._mm[offset:offset + self.record_size])
+        return memoryview(self._mm)[offset:offset + self.record_size]
 
     def advance(self):
-        """Remove the next record after it has been processed."""
+        """Consume the next record after processing it."""
         tail = self._tail()
 
         if self._head() == tail:
             return False
 
         struct.pack_into("<Q", self._mm, 8, tail + 1)
-
         return True
 
     def pop(self):
-        """Read and remove the next record."""
-        record = self.peek_view()
+        """Read and remove the next record, returning independent bytes."""
+        view = self.peek_view()
 
-        if record is None:
+        if view is None:
             return None
 
-        self.advance()
+        try:
+            record = bytes(view)
+        finally:
+            view.release()
 
+        self.advance()
         return record
 
     def close(self):
