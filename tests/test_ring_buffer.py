@@ -169,3 +169,41 @@ def test_zero_record_size_rejected(tmp_path):
             capacity=4,
             record_size=0,
         )
+
+def test_attach_missing_file_times_out(tmp_path):
+    path = str(tmp_path / "missing.ring")
+
+    with pytest.raises(TimeoutError, match="Timed out waiting"):
+        RingBuffer(
+            path,
+            create=False,
+            timeout=0,
+            retry_interval=0.01,
+        )
+
+
+def test_attach_rejects_zero_header_capacity(tmp_path):
+    path = str(tmp_path / "invalid.ring")
+
+    with open(path, "wb") as f:
+        f.truncate(64)
+
+    with pytest.raises(ValueError, match="header capacity must be positive"):
+        RingBuffer(path, create=False, timeout=0)
+
+def test_attach_rejects_file_size_mismatch(tmp_path):
+    path = str(tmp_path / "wrong_size.ring")
+
+    writer = RingBuffer(path, capacity=4, record_size=32)
+    writer.close()
+
+    with open(path, "r+b") as f:
+        f.truncate(64 + 4 * 32 - 1)
+
+    with pytest.raises(ValueError, match="file size mismatch"):
+        RingBuffer(
+            path,
+            create=False,
+            record_size=32,
+            timeout=0,
+        )

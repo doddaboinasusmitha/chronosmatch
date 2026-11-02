@@ -11,12 +11,25 @@ HEADER_SIZE = 64
 class RingBuffer:
     """Single-producer, single-consumer ring buffer."""
 
-    def __init__(self, path, capacity=1024, create=True, record_size=ORDER_SIZE):
+    def __init__(
+        self,
+        path,
+        capacity=1024,
+        create=True,
+        record_size=ORDER_SIZE,
+        timeout=5.0,
+        retry_interval=0.1,
+    ):
+        import time
+
         if record_size <= 0:
             raise ValueError("record_size must be positive")
-
         if create and capacity <= 0:
             raise ValueError("capacity must be positive")
+        if timeout < 0:
+            raise ValueError("timeout must be non-negative")
+        if retry_interval <= 0:
+            raise ValueError("retry_interval must be positive")
 
         self.record_size = record_size
 
@@ -24,19 +37,43 @@ class RingBuffer:
             with open(path, "wb") as f:
                 f.truncate(HEADER_SIZE + capacity * self.record_size)
 
-        self._file = open(path, "r+b")
-        self._mm = mmap.mmap(self._file.fileno(), 0)
+        deadline = time.monotonic() + timeout
 
-        if create:
-            struct.pack_into(HEADER_FORMAT, self._mm, 0, 0, 0, capacity)
+        while True:
+            try:
+                self._file = open(path, "r+b")
+                break
+            except FileNotFoundError:
+                if create or time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Timed out waiting for ring buffer file: {path}"
+                    )
+                time.sleep(min(retry_interval, max(0, deadline - time.monotonic())))
 
-        self.capacity = struct.unpack_from("<Q", self._mm, 16)[0]
+        try:
+            self._mm = mmap.mmap(self._file.fileno(), 0)
 
-        expected_size = HEADER_SIZE + self.capacity * self.record_size
-        if len(self._mm) != expected_size:
-            self._mm.close()
+            if create:
+                struct.pack_into(HEADER_FORMAT, self._mm, 0, 0, 0, capacity)
+
+            self.capacity = struct.unpack_from("<Q", self._mm, 16)[0]
+
+            if self.capacity <= 0:
+                raise ValueError("Ring buffer header capacity must be positive")
+
+            expected_size = HEADER_SIZE + self.capacity * self.record_size
+
+            if len(self._mm) != expected_size:
+                raise ValueError(
+                    f"Ring buffer file size mismatch: expected {expected_size} "
+                    f"bytes, got {len(self._mm)} bytes"
+                )
+
+        except Exception:
+            if hasattr(self, "_mm"):
+                self._mm.close()
             self._file.close()
-            raise ValueError("Ring buffer file size does not match record_size")
+            raise
 
     def _head(self):
         return struct.unpack_from("<Q", self._mm, 0)[0]
