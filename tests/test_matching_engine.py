@@ -50,4 +50,3 @@ def test_matching_engine_publishes_trade_and_updates_stats(tmp_path):
         order_buffer.close()
         trade_buffer.close()
         stats.close()
-
