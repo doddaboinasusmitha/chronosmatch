@@ -1,155 +1,152 @@
-"""ChronosMatch terminal market dashboard."""
+"""Read-only ChronosMatch live statistics dashboard."""
 
 import curses
 import time
 from datetime import datetime
 
+try:
+    import curses
+except ImportError:
+    curses = None
 
-def safe_addstr(window, y, x, text):
-    """Print text safely without crashing at terminal boundaries."""
-    try:
-        height, width = window.getmaxyx()
-        if 0 <= y < height and 0 <= x < width:
-            available = max(0, width - x - 1)
-            window.addnstr(y, x, str(text), available)
-    except curses.error:
-        pass
+from ipc.stats import StatsReader
 
 
-def get_market_data():
-    """Return placeholder data until the live engine is connected."""
+def percentile_latency_ns(buckets, percentile):
+    """Estimate a latency percentile from the 64 base-2 buckets."""
+    if not 0 < percentile <= 100:
+        raise ValueError("percentile must be greater than 0 and at most 100")
+
+    total = sum(buckets)
+    if total == 0:
+        return None
+
+    target = max(1, (total * percentile + 99) // 100)
+    cumulative = 0
+
+    for index, count in enumerate(buckets):
+        cumulative += count
+        if cumulative >= target:
+            return (1 << (index + 1)) - 1
+
+    return None
+
+
+def get_market_data(path="stats.bin"):
+    """Read a snapshot without modifying the engine stats file."""
+    with StatsReader(path) as reader:
+        stats = reader.snapshot()
+
+    bid = stats["best_bid"]
+    ask = stats["best_ask"]
+    heartbeat = stats["heartbeat_ns"]
+    age_ns = max(0, time.time_ns() - heartbeat) if heartbeat else None
+
     return {
-        "available": False,
-        "buy_orders": [],
-        "sell_orders": [],
-        "orders_per_second": 0.0,
-        "last_trade": "Last trade: waiting for trade",
-        "engine_status": "NOT RESPONDING",
-        "activity": [
-            "Live market data is not connected",
-            "Waiting for engine data interface",
-        ],
+        **stats,
+        "spread": ask - bid if bid and ask else None,
+        "p50_latency_ns": percentile_latency_ns(
+            stats["latency_buckets"], 50
+        ),
+        "p99_latency_ns": percentile_latency_ns(
+            stats["latency_buckets"], 99
+        ),
+        "heartbeat_age_ns": age_ns,
     }
 
 
-def draw_order_book(window, data, height, width):
-    """Display buy and sell orders."""
-    safe_addstr(window, 2, 2, "BUY ORDERS")
-    safe_addstr(window, 2, max(2, width // 2), "SELL ORDERS")
+def safe_addstr(window, y, x, text):
+    """Avoid writing beyond the visible terminal area."""
+    height, width = window.getmaxyx()
 
-    buy_orders = data.get("buy_orders", [])
-    sell_orders = data.get("sell_orders", [])
-
-    if not buy_orders:
-        safe_addstr(window, 3, 2, "No buy orders yet")
-
-    if not sell_orders:
-        safe_addstr(
-            window, 3, max(2, width // 2), "No sell orders yet"
-        )
-
-    for index, order in enumerate(buy_orders):
-        y = 3 + index
-        if y >= height - 1:
-            break
-        safe_addstr(window, y, 2, str(order))
-
-    for index, order in enumerate(sell_orders):
-        y = 3 + index
-        if y >= height - 1:
-            break
-        safe_addstr(window, y, max(2, width // 2), str(order))
-
-
-def draw_activity(window, data, height, width):
-    """Display recent dashboard activity."""
-    safe_addstr(window, 1, 2, "ACTIVITY")
-
-    activity = data.get("activity", [])
-
-    for index, message in enumerate(activity):
-        y = 3 + index
-        if y >= height - 1:
-            break
-        safe_addstr(window, y, 2, f"- {message}")
-
-
-def draw_status(window, data, height, width):
-    """Display connection status, metrics, and current time."""
-    status = (
-        "LIVE DATA CONNECTED"
-        if data.get("available", False)
-        else "WAITING FOR ENGINE DATA"
-    )
-
-    safe_addstr(window, height - 3, 2, f"Status: {status}")
-    safe_addstr(
-        window,
-        height - 2,
-        2,
-        f"Orders/sec: {data.get('orders_per_second', 0.0):.2f}",
-    )
-    safe_addstr(
-        window,
-        height - 1,
-        2,
-        str(data.get("last_trade", "Last trade: waiting for trade")),
-    )
+    if 0 <= y < height and 0 <= x < width - 1:
+        try:
+            window.addnstr(y, x, str(text), width - x - 1)
+        except curses.error:
+            pass
 
 
 def draw(stdscr):
-    """Main dashboard loop. Press Q to quit."""
+    """Display live engine statistics. Press Q to quit."""
     curses.curs_set(0)
     stdscr.nodelay(True)
 
     while True:
-        height, width = stdscr.getmaxyx()
-        stdscr.erase()
-
-        safe_addstr(stdscr, 0, 2, "ChronosMatch - Market Dashboard")
-
-        if height < 16 or width < 50:
-            safe_addstr(
-                stdscr, 2, 2, "Please enlarge the terminal window."
-            )
-        else:
-            data = get_market_data()
-
-            draw_order_book(stdscr, data, height // 2, width)
-
-            activity_y = height // 2
-            activity_height = max(3, height - activity_y - 5)
-
-            try:
-                activity_window = stdscr.derwin(
-                    activity_height, width, activity_y, 0
-                )
-                draw_activity(
-                    activity_window, data, activity_height, width
-                )
-            except curses.error:
-                pass
-
-            safe_addstr(
-                stdscr,
-                height - 4,
-                2,
-                f"Engine: {data.get('engine_status', 'UNKNOWN')}",
-            )
-            draw_status(stdscr, data, height, width)
-
-        safe_addstr(stdscr, height - 1, max(2, width - 20), "Press Q to quit")
-        stdscr.refresh()
-
         key = stdscr.getch()
-        if key in (ord("q"), ord("Q")):
+        if key in (ord("q"), ord("Q"), 3):
             break
 
+        stdscr.erase()
+        height, width = stdscr.getmaxyx()
+
+        safe_addstr(stdscr, 0, 2, "CHRONOSMATCH - LIVE ENGINE STATS")
+
+        if height < 12 or width < 55:
+            safe_addstr(
+                stdscr, 3, 2,
+                "Enlarge the terminal. Press Q to quit."
+            )
+            stdscr.refresh()
+            time.sleep(0.2)
+            continue
+
+        try:
+            data = get_market_data()
+        except (OSError, ValueError, KeyError) as exc:
+            safe_addstr(
+                stdscr, 3, 2,
+                f"Waiting for valid stats.bin: {exc}"
+            )
+            safe_addstr(stdscr, height - 1, 2, "Press Q to quit")
+            stdscr.refresh()
+            time.sleep(0.2)
+            continue
+
+        age = data["heartbeat_age_ns"]
+
+        if age is None:
+            status = "NO HEARTBEAT"
+        elif age < 5_000_000_000:
+            status = "LIVE"
+        else:
+            status = "STALE"
+
+        spread = data["spread"]
+        p50 = data["p50_latency_ns"]
+        p99 = data["p99_latency_ns"]
+
+        lines = [
+            f"System:           {status}",
+            f"Orders processed: {data['orders']}",
+            f"Trades executed:  {data['trades']}",
+            f"Best bid:         {data['best_bid'] or 'N/A'}",
+            f"Best ask:         {data['best_ask'] or 'N/A'}",
+            f"Spread:           {spread if spread is not None else 'N/A'}",
+            f"Last trade price: {data['last_trade_price'] or 'N/A'}",
+            f"Last trade qty:   {data['last_trade_quantity']}",
+            f"Latency p50:      {p50 if p50 is not None else 'N/A'} ns",
+            f"Latency p99:      {p99 if p99 is not None else 'N/A'} ns",
+            f"Latency samples:  {sum(data['latency_buckets'])}",
+            f"Updated:          {datetime.now().strftime('%H:%M:%S')}",
+            "Press Q to quit",
+        ]
+
+        for index, line in enumerate(lines, start=2):
+            safe_addstr(stdscr, index, 2, line)
+
+        stdscr.refresh()
         time.sleep(0.2)
 
 
 if __name__ == "__main__":
-    try:
-        curses.wrapper(draw)
-    except KeyboardInterrupt:
-        pass
+    if curses is None:
+        print(
+            "Terminal dashboard needs curses support. "
+            "On Windows, install it with: "
+            "python -m pip install windows-curses"
+        )
+    else:
+        try:
+            curses.wrapper(draw)
+        except KeyboardInterrupt:
+            pass
