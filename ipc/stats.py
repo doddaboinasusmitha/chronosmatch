@@ -38,25 +38,30 @@ class StatsBlock:
             if os.path.getsize(path) != STATS_SIZE:
                 self._file.close()
                 raise ValueError("Invalid stats.bin file size")
+        self._mm = None
 
-        self._mm = mmap.mmap(self._file.fileno(), STATS_SIZE)
+        try:
+            self._mm = mmap.mmap(self._file.fileno(), STATS_SIZE)
 
-        if create:
-            self._write_header(
-                trades=0,
-                orders=0,
-                best_bid=0,
-                best_ask=0,
-                last_trade_price=0,
-                last_trade_quantity=0,
-                heartbeat_ns=time.time_ns(),
-            )
-            self._write_buckets([0] * LATENCY_BUCKETS)
-        else:
-            values = self._read_header()
-            if values[0] != MAGIC or values[1] != VERSION:
-                self.close()
-                raise ValueError("Invalid stats.bin magic or version")
+            if create:
+                self._write_header(
+                    trades=0,
+                    orders=0,
+                    best_bid=0,
+                    best_ask=0,
+                    last_trade_price=0,
+                    last_trade_quantity=0,
+                    heartbeat_ns=time.time_ns(),
+                )
+                self._write_buckets([0] * LATENCY_BUCKETS)
+            else:
+                values = self._read_header()
+                if values[0] != MAGIC or values[1] != VERSION:
+                    raise ValueError("Invalid stats.bin magic or version")
+
+        except Exception:
+            self.close()
+            raise
 
     def _write_header(
         self, trades, orders, best_bid, best_ask,
