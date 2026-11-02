@@ -242,6 +242,5 @@ def draw(stdscr):
 if __name__ == "__main__":
     try:
         curses.wrapper(draw)
-
     except KeyboardInterrupt:
         pass
