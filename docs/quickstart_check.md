@@ -1,133 +1,38 @@
-\# Fresh Clone Quickstart Verification
+﻿# Fresh Clone Quickstart Verification
 
+## Current Repository Setup
 
+The repository includes requirements.txt with pytest, Cython, and Windows curses dependencies.
 
-\## Test Environment
+## Windows Setup
 
-\- Operating System: Windows
+1. Create a virtual environment:
+   python -m venv .venv
 
-\- Python Version: 3.14.7
+2. Activate it:
+   .\.venv\Scripts\Activate.ps1
 
-\- Branch Tested: madhu
+3. Install dependencies:
+   python -m pip install -r requirements.txt
 
-\- Test Method: Fresh Git clone in a separate folder
+4. Build both Cython extensions:
+   python setup.py build_ext --inplace
+   python engine/setup.py build_ext --inplace
 
-\- Virtual Environment: .venv
+A Microsoft C++ Build Tools compiler is required for the Cython builds.
 
+## Run Tests
 
+Run:
+   python -m pytest -v
 
-\## Verification Results
+The current integration branch collects 100 tests, all of which passed in the latest local test run.
 
+## Historical Verification
 
+An earlier fresh-clone verification was performed on the madhu branch using Python 3.14.7. It recorded 49 passing tests. This is a historical result, not verification of the current integration branch.
 
-| Step | Result |
+## Limitations
 
-|---|---|
-
-| Clone repository | Passed |
-
-| Create virtual environment | Passed |
-
-| Install dependencies | Passed |
-
-| Build Cython extension | Passed |
-
-| Run complete test suite | Passed |
-
-| Git working tree after test | Clean |
-
-
-
-\## Dependencies Identified
-
-
-
-The following packages were installed manually because the repository does not contain a requirements.txt file:
-
-
-
-\- setuptools
-
-\- Cython
-
-\- pytest
-
-
-
-\## Build Requirements
-
-
-
-The Cython extension was successfully built using:
-
-
-
-`python setup.py build\_ext --inplace`
-
-
-
-A working Microsoft C++ compiler toolchain is required on Windows.
-
-
-
-\## Test Command
-
-
-
-`python -m pytest -q`
-
-
-
-\*\*Result: 49 tests passed in 1.41 seconds.\*\*
-
-
-
-\## Missing Quickstart Instructions
-
-
-
-The existing README describes the ring buffer layout but does not provide complete setup instructions.
-
-
-
-The following information should be added:
-
-
-
-1\. Python version and prerequisites.
-
-2\. Virtual environment creation.
-
-3\. Dependency installation.
-
-4\. Cython extension build instructions.
-
-5\. Test execution instructions.
-
-6\. Windows C++ Build Tools requirement.
-
-7\. Troubleshooting guidance for build failures.
-
-
-
-\## Limitations
-
-
-
-\- Verification was performed on Windows only.
-
-\- Linux and macOS fresh-clone verification was not performed.
-
-\- The test used the madhu branch.
-
-
-
-\## Conclusion
-
-
-
-The ChronosMatch repository was successfully cloned into a new folder, configured with a fresh Python virtual environment, built, and tested on Windows.
-
-
-
-All 49 tests passed. However, the README needs complete quickstart instructions to make the setup reproducible for new contributors.
+- Fresh-clone verification was previously performed on Windows only.
+- Linux and macOS verification has not been documented.

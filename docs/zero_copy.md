@@ -1,4 +1,4 @@
-# Zero-Copy Data Flow in ChronosMatch
+﻿# Zero-Copy Data Flow in ChronosMatch
 
 ## 1. Introduction
 
@@ -74,7 +74,7 @@ record = ring.pop()
 
 This creates a copy of the record data.
 
-The simulator and `ipc/check_pipe.py` currently use this normal copying method.
+The simulator currently uses this normal copying method when reading trade records from the trade buffer. The former `ipc/check_pipe.py` script has been removed; its pipe audit is now covered by `tests/test_pipe_10k.py`.
 
 ## 5. Data Flow in the Trade Journal
 
