@@ -1,5 +1,6 @@
-import mmap
+﻿import mmap
 import struct
+import time
 
 from ipc.record import ORDER_SIZE
 
@@ -10,11 +11,23 @@ HEADER_SIZE = 64
 class RingBuffer:
     """Single-producer, single-consumer memory-mapped ring buffer."""
 
-    def __init__(self, path, capacity=1024, create=True, record_size=ORDER_SIZE):
-        if capacity < 1:
-            raise ValueError("Capacity must be at least 1")
-        if record_size < 1:
-            raise ValueError("Record size must be at least 1")
+    def __init__(
+        self,
+        path,
+        capacity=1024,
+        create=True,
+        record_size=ORDER_SIZE,
+        timeout=5.0,
+        retry_interval=0.1,
+    ):
+        if record_size <= 0:
+            raise ValueError("record_size must be positive")
+        if create and capacity <= 0:
+            raise ValueError("capacity must be positive")
+        if timeout < 0:
+            raise ValueError("timeout must be non-negative")
+        if retry_interval <= 0:
+            raise ValueError("retry_interval must be positive")
 
         self.record_size = record_size
 
@@ -22,7 +35,22 @@ class RingBuffer:
             with open(path, "wb") as file:
                 file.truncate(HEADER_SIZE + capacity * record_size)
 
-        self._file = open(path, "r+b")
+        deadline = time.monotonic() + timeout
+
+        while True:
+            try:
+                self._file = open(path, "r+b")
+                break
+            except FileNotFoundError:
+                if create or time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Timed out waiting for ring buffer file: {path}"
+                    )
+                time.sleep(
+                    min(retry_interval, max(0, deadline - time.monotonic()))
+                )
+
+        self._mm = None
 
         try:
             self._mm = mmap.mmap(self._file.fileno(), 0)
@@ -34,18 +62,21 @@ class RingBuffer:
 
             self.capacity = struct.unpack_from("<Q", self._mm, 16)[0]
 
-            if self.capacity < 1:
-                raise ValueError("Invalid ring buffer capacity")
+            if self.capacity <= 0:
+                raise ValueError(
+                    "Ring buffer header capacity must be positive"
+                )
 
             expected_size = HEADER_SIZE + self.capacity * self.record_size
 
             if len(self._mm) != expected_size:
                 raise ValueError(
-                    f"Buffer size mismatch: expected {expected_size} bytes"
+                    f"Ring buffer file size mismatch: expected {expected_size} "
+                    f"bytes, got {len(self._mm)} bytes"
                 )
 
         except Exception:
-            if hasattr(self, "_mm"):
+            if self._mm is not None:
                 self._mm.close()
             self._file.close()
             raise
@@ -121,7 +152,7 @@ class RingBuffer:
 
     def close(self):
         """Close the memory map and file safely."""
-        if not self._mm.closed:
+        if self._mm is not None and not self._mm.closed:
             self._mm.close()
 
         if not self._file.closed:
