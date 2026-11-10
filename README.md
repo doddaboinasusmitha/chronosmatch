@@ -1,227 +1,160 @@
-ChronosMatch
+ChronosMatch – Zero-Copy High-Frequency Trading Engine
 
+1. Project Overview
 
+ChronosMatch is a Python-based high-frequency trading simulation system designed to demonstrate efficient order processing, matching, shared-memory communication, and real-time market monitoring.
 
-Zero-Copy High-Frequency Trading Engine
+The project uses a memory-mapped ring buffer to transfer order data between components efficiently, reducing unnecessary data copying.
 
+2. Key Features
 
+- Order Simulation: Generates buy and sell orders for testing.
+- Zero-Copy Communication: Uses a memory-mapped ring buffer for efficient data transfer.
+- Matching Engine: Processes orders and matches compatible buy and sell orders.
+- Order Book: Maintains buy and sell order information.
+- Trade Execution: Generates trade records when orders are matched.
+- SQLite Database: Stores executed trade information.
+- Dashboard: Displays market information and engine status.
+- Performance Testing: Includes benchmarks and automated tests.
 
-ChronosMatch is a high-frequency trading engine project designed to process buy and sell orders using a shared-memory ring buffer. It demonstrates order processing, matching, trade recording, statistics, and market dashboard concepts.
+3. System Architecture
 
+       Order Simulator
+              |
+              v
+     Shared Memory Ring Buffer
+              |
+              v
+       Matching Engine
+              |
+              v
+         Order Book
+              |
+              v
+       Trade Execution
+              |
+        +-----+------+
+        |            |
+        v            v
+   SQLite DB     Statistics
+                     |
+                     v
+                  Dashboard
 
+4. Technologies Used
 
-Features
+- Python
+- Cython (optional acceleration)
+- Memory-mapped files
+- SQLite
+- Curses dashboard
+- Pytest
+- Git and GitHub
 
-
-
-\- Shared-memory ring buffer for order transfer
-
-\- Order simulator for generating buy and sell orders
-
-\- Matching engine for processing orders
-
-\- Trade recording and statistics
-
-\- Market dashboard for displaying order book information
-
-\- Automated tests
-
-\- Benchmark simulator
-
-
-
-Architecture
-
-
-
-The main components of ChronosMatch include:
-
-
-
-1\. Order Simulator
-
-2\. Shared Memory Ring Buffer
-
-3\. Matching Engine
-
-4\. Trade Execution
-
-5\. Trade Database
-
-6\. Statistics
-
-7\. Market Dashboard
-
-
-
-Refer to "docs/architecture.md" (docs/architecture.md) for the architecture diagram and component details.
-
-
-
-Project Structure
-
-
+5. Project Structure
 
 chronosmatch/
-
-├── benchmarks/
-
-├── dashboard/
-
-├── docs/
-
+│
 ├── engine/
-
+│   ├── matching_engine.py
+│   ├── order_book.py
+│   ├── ledger.py
+│   ├── metrics.py
+│   └── convert_report.py
+│
 ├── ipc/
-
+│   └── Ring buffer implementation
+│
 ├── simulator/
-
+│   └── Order generation
+│
+├── dashboard/
+│   ├── dashboard.py
+│   └── panels.py
+│
 ├── tests/
-
+│   └── Automated test files
+│
+├── docs/
+│   ├── architecture.md
+│   ├── benchmark_results.md
+│   ├── project_report.md
+│   ├── project_report.pdf
+│   └── submission_checklist.md
+│
+├── run_demo.py
 ├── requirements.txt
-
 └── README.md
 
+6. Installation
 
+Clone the repository:
 
-Requirements
+git clone https://github.com/doddaboinasusmitha/chronosmatch.git
 
+Move into the project directory:
 
-
-\- Python
-
-\- Git
-
-\- Visual Studio Code (recommended)
-
-
-
-Setup
-
-
-
-Clone the repository and navigate to its root directory.
-
-
+cd chronosmatch
 
 Create a virtual environment:
 
+python -m venv venv
 
+Activate it on Windows:
 
-python -m venv .venv
+.\venv\Scripts\Activate.ps1
 
-
-
-Activate it:
-
-
-
-.\\.venv\\Scripts\\Activate.ps1
-
-
-
-Install dependencies:
-
-
+Install the dependencies:
 
 python -m pip install -r requirements.txt
 
+7. Running the Project
 
+Run the integrated demonstration:
 
-Run Tests
+python run_demo.py
 
+The demonstration executes the order simulation, matching engine, trade processing, database storage, and dashboard.
 
+Press "Q" to exit the dashboard.
 
-Run the automated tests:
+8. Running Automated Tests
 
-
+Execute the test suite:
 
 python -m pytest -v
 
+The project test suite has previously completed successfully with 100 tests passed.
 
+9. Database Verification
 
-The tests verify components such as the ring buffer and simulator.
+To check the SQLite trade database, run:
 
+python check_db.py
 
+The verification script displays the database tables and their record counts.
 
-Run Benchmark
+10. Project Documentation
 
+Additional documentation is available in the "docs/" directory, including:
 
+- System architecture
+- Ring buffer design
+- Data contract and record specification
+- Benchmark results
+- Setup and usage guide
+- Final project report
+- Final review video script
+- Submission checklist
 
-Run the benchmark simulator:
+11. Conclusion
 
+ChronosMatch demonstrates how order simulation, efficient shared-memory communication, matching algorithms, trade execution, database storage, and dashboard monitoring can be integrated into a high-frequency trading simulation system.
 
+The project provides practical experience in Python development, system integration, performance testing, and software collaboration.
 
-python benchmarks/benchmark\_simulator.py --count 100
+---
 
-
-
-Benchmark Results
-
-
-
-In a benchmark run with 100 orders:
-
-
-
-Metric| Result
-
-Orders generated| 100
-
-Orders processed| 100
-
-Trades produced| 77
-
-Orders in statistics| 100
-
-Best bid| 10026
-
-Best ask| 10034
-
-Last trade price| 10026
-
-
-
-See "docs/benchmark\_results.md" (docs/benchmark\_results.md) for more details.
-
-
-
-Dashboard
-
-
-
-Refer to "dashboard/README.md" (dashboard/README.md) for dashboard instructions.
-
-
-
-A complete live demonstration requires the simulator, matching engine, shared statistics, and dashboard to be integrated and running.
-
-
-
-Documentation
-
-
-
-\- "Setup Guide" (docs/setup.md)
-
-\- "Usage Guide" (docs/usage\_guide.md)
-
-\- "Architecture" (docs/architecture.md)
-
-\- "Benchmark Results" (docs/benchmark\_results.md)
-
-
-
-Project Status
-
-
-
-ChronosMatch is a project demonstrating trading engine components, order processing, benchmarking, and dashboard functionality. Refer to the module documentation for implementation details and usage instructions.
-
-
-
-License
-
-
-
-See the repository license file, if available.
+Project: ChronosMatch
+Repository: https://github.com/doddaboinasusmitha/chronosmatch
+Branch: sushmitha-ba
