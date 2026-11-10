@@ -1,15 +1,14 @@
-﻿import argparse
+import argparse
 import asyncio
 
-from ipc.ring_buffer import RingBuffer
-from ipc.record import ORDER_SIZE
-from ipc.trade import TRADE_SIZE, unpack_trade
-from ipc.stats import StatsBlock
 from ipc.journal import process_batch
-
+from ipc.record import ORDER_SIZE
+from ipc.ring_buffer import RingBuffer
+from ipc.stats import StatsBlock
+from ipc.trade import TRADE_SIZE, unpack_trade
 from simulator.order_generator import OrderGenerator
-from engine.book_adapter import create_order_book
 from engine.matching_engine import MatchingEngine
+from engine.order_book import OrderBook
 
 
 async def run(
@@ -21,8 +20,7 @@ async def run(
     stats_file="stats.bin",
     journal_db=None,
 ):
-    """Generate orders, run the matching engine, and report results."""
-
+    """Generate orders, run the engine, and optionally save trades."""
     if count < 0:
         raise ValueError("count must be non-negative")
 
@@ -33,92 +31,83 @@ async def run(
     trade_buffer = None
     stats = None
 
-    sent = 0
-    processed = 0
-    trade_count = 0
-
     try:
-        # Create the order ring buffer.
+        capacity = max(count, 1)
+
         order_buffer = RingBuffer(
             ring,
-            capacity=max(count, 1),
+            capacity=capacity,
             record_size=ORDER_SIZE,
         )
 
-        # Create the trade ring buffer.
         trade_buffer = RingBuffer(
             trade_ring,
-            capacity=max(count, 1),
+            capacity=capacity,
             record_size=TRADE_SIZE,
         )
 
-        # Create statistics storage.
         stats = StatsBlock(stats_file, create=True)
 
-        # Initialize matching engine.
-        order_book = create_order_book()
-
-        engine = MatchingEngine(
-            order_book,
-            trade_buffer,
-            stats,
-        )
-
-        # Initialize deterministic order generator.
+        order_book = OrderBook()
+        engine = MatchingEngine(order_book, trade_buffer, stats)
         generator = OrderGenerator(seed=seed)
 
-        # Generate orders, write to ring, and process them.
-        for _ in range(count):
+        sent = 0
+        processed = 0
+
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
+        interval = 1.0 / rate if rate > 0 else 0.0
+
+        for index in range(count):
             order = generator.generate_order()
 
-            # Store the order in the order ring buffer.
             if not order_buffer.push(order):
-                raise RuntimeError("Order buffer is full")
+                raise RuntimeError("Order ring buffer is full")
 
             sent += 1
 
-            # Process the same order without removing it from the ring.
+            # Process the generated order directly. Keep the order in the
+            # ring buffer so it remains available for later inspection.
             engine.process_order(order)
             processed += 1
 
-            if rate > 0:
-                await asyncio.sleep(1 / rate)
+            if interval:
+                target_time = start_time + (index + 1) * interval
+                delay = target_time - loop.time()
 
-        # Process trades produced by the matching engine.
+                if delay > 0:
+                    await asyncio.sleep(delay)
+
         if journal_db is not None:
-            trade_count = process_batch(
+            saved_count = process_batch(
                 trade_buffer,
                 db_path=journal_db,
                 batch_size=max(count, 1),
             )
-
-            print("Trades saved to SQLite:", trade_count)
-
+            print(f"Trades saved to SQLite: {saved_count}")
         else:
+            displayed = 0
+
             while not trade_buffer.is_empty():
-                record = trade_buffer.pop()
+                trade_data = trade_buffer.pop()
+                trade = unpack_trade(trade_data)
 
-                if record is None:
-                    break
-
-                trade = unpack_trade(record)
-                trade_count += 1
-
-                if trade_count <= 5:
+                if displayed < 5:
                     print("Trade:", trade)
 
-        # Read final statistics.
+                displayed += 1
+
         snapshot = stats.snapshot()
 
-        print("\n--- ChronosMatch Results ---")
-        print("orders written:", sent)
-        print("Orders generated:", sent)
-        print("Orders processed:", processed)
-        print("Trades produced:", trade_count)
-        print("Orders in statistics:", snapshot["orders"])
-        print("Best bid:", snapshot["best_bid"])
-        print("Best ask:", snapshot["best_ask"])
-        print("Last trade price:", snapshot["last_trade_price"])
+        print(f"orders written: {sent}")
+        print(f"Orders generated: {sent}")
+        print(f"Orders processed: {processed}")
+        print(f"Trades produced: {snapshot['trades']}")
+        print(f"Orders in statistics: {snapshot['orders']}")
+        print(f"Best bid: {snapshot['best_bid']}")
+        print(f"Best ask: {snapshot['best_ask']}")
+        print(f"Last trade price: {snapshot['last_trade_price']}")
 
     finally:
         if order_buffer is not None:
@@ -133,11 +122,10 @@ async def run(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ChronosMatch order-book simulator"
+        description="Run the ChronosMatch trading simulator"
     )
-
     parser.add_argument("--count", type=int, default=1000)
-    parser.add_argument("--rate", type=int, default=1000)
+    parser.add_argument("--rate", type=float, default=1000)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--ring", default="orders.ring")
     parser.add_argument("--trade-ring", default="trades.ring")
@@ -145,12 +133,6 @@ def main():
     parser.add_argument("--journal-db", default=None)
 
     args = parser.parse_args()
-
-    if args.count < 0:
-        parser.error("--count must be non-negative")
-
-    if args.rate < 0:
-        parser.error("--rate must be non-negative")
 
     asyncio.run(
         run(
