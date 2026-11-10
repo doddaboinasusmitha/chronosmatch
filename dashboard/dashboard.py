@@ -50,11 +50,14 @@ def format_order(order):
     return str(order)
 
 
-def get_market_data():
+def get_market_data(stats_path=None):
     """Read market statistics from stats.bin."""
     global _previous_orders, _previous_sample_time
 
-    stats_block = StatsBlock(path=STATS_PATH, create=False)
+    if stats_path is None:
+        stats_path = STATS_PATH
+
+    stats_block = StatsBlock(path=stats_path, create=False)
 
     try:
         stats = stats_block.snapshot()
