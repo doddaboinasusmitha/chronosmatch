@@ -1,15 +1,14 @@
-﻿"""ChronosMatch live market and engine statistics dashboard."""
+"""ChronosMatch live market and engine statistics dashboard."""
 
+import curses
+import os
 import time
-from datetime import datetime
 
-try:
-    import curses
-except ImportError:
-    curses = None
+from ipc.stats import StatsBlock
 
-from ipc.stats import StatsReader
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATS_PATH = os.path.join(BASE_DIR, "stats.bin")
 
 WHALE_ORDER_THRESHOLD = 1000
 _previous_orders = None
@@ -17,7 +16,7 @@ _previous_sample_time = None
 
 
 def percentile_latency_ns(buckets, percentile):
-    """Estimate a latency percentile from 64 base-2 buckets."""
+    """Estimate a latency percentile from base-2 buckets."""
     if not 0 < percentile <= 100:
         raise ValueError("Invalid percentile")
 
@@ -37,7 +36,7 @@ def percentile_latency_ns(buckets, percentile):
 
 
 def format_order(order):
-    """Format an order and identify large quantities when available."""
+    """Identify large orders when quantity is available."""
     if isinstance(order, dict):
         quantity = order.get(
             "quantity", order.get("qty", order.get("size", 0))
@@ -51,18 +50,21 @@ def format_order(order):
     return str(order)
 
 
-def get_market_data(path="stats.bin"):
-    """Read live engine statistics without modifying the stats file."""
+def get_market_data():
+    """Read market statistics from stats.bin."""
     global _previous_orders, _previous_sample_time
 
-    with StatsReader(path) as reader:
-        stats = reader.snapshot()
+    stats_block = StatsBlock(path=STATS_PATH, create=False)
+
+    try:
+        stats = stats_block.snapshot()
+    finally:
+        stats_block.close()
 
     now = time.time()
-    heartbeat = stats["heartbeat_ns"]
-    age_ns = max(0, time.time_ns() - heartbeat) if heartbeat else None
+    orders = stats.get("orders", 0)
+    heartbeat = stats.get("heartbeat_ns", 0)
 
-    orders = stats["orders"]
     orders_per_second = 0.0
 
     if _previous_orders is not None and _previous_sample_time is not None:
@@ -75,38 +77,46 @@ def get_market_data(path="stats.bin"):
     _previous_orders = orders
     _previous_sample_time = now
 
-    bid = stats["best_bid"]
-    ask = stats["best_ask"]
+    age_ns = max(0, time.time_ns() - heartbeat) if heartbeat else None
+
+    engine_alive = (
+        age_ns is not None and age_ns < 5_000_000_000
+    )
+
+    if not engine_alive:
+        orders_per_second = 0.0
+
+    bid = stats.get("best_bid", 0)
+    ask = stats.get("best_ask", 0)
+    last_price = stats.get("last_trade_price", 0)
+    last_quantity = stats.get("last_trade_quantity", 0)
+
+    buckets = stats.get("latency_buckets", [])
 
     if age_ns is None:
         status = "NO HEARTBEAT"
-    elif age_ns <= 5_000_000_000:
+    elif engine_alive:
         status = "LIVE"
     else:
         status = "STALE"
 
     return {
         **stats,
-        "available": age_ns is not None,
+        "available": engine_alive,
         "engine_status": status,
         "heartbeat_age_ns": age_ns,
         "spread": ask - bid if bid and ask else None,
         "orders_per_second": orders_per_second,
-        "p50_latency_ns": percentile_latency_ns(
-            stats["latency_buckets"], 50
-        ),
-        "p99_latency_ns": percentile_latency_ns(
-            stats["latency_buckets"], 99
-        ),
+        "p50_latency_ns": percentile_latency_ns(buckets, 50),
+        "p99_latency_ns": percentile_latency_ns(buckets, 99),
         "activity": [
             f"Orders processed: {orders}",
-            f"Trades executed: {stats['trades']}",
-            f"Latency samples: {sum(stats['latency_buckets'])}",
+            f"Trades executed: {stats.get('trades', 0)}",
+            f"Latency samples: {sum(buckets)}",
         ],
         "last_trade": (
-            f"Last trade: {stats['last_trade_quantity']} "
-            f"@ {stats['last_trade_price']}"
-            if stats["last_trade_price"]
+            f"Last trade: {last_quantity} @ {last_price}"
+            if engine_alive and last_price
             else "Last trade: waiting for trade"
         ),
     }
@@ -118,17 +128,17 @@ def safe_addstr(window, y, x, text):
         height, width = window.getmaxyx()
         if 0 <= y < height and 0 <= x < width - 1:
             window.addnstr(y, x, str(text), width - x - 1)
-    except Exception:
+    except curses.error:
         pass
 
 
 def draw_order_book(window, data, height, width):
-    """Display actual best bid, best ask and spread."""
+    """Display best bid, best ask and spread."""
     safe_addstr(window, 2, 2, "BEST BID")
     safe_addstr(window, 2, max(2, width // 2), "BEST ASK")
 
-    bid = data["best_bid"]
-    ask = data["best_ask"]
+    bid = data.get("best_bid", 0)
+    ask = data.get("best_ask", 0)
 
     safe_addstr(window, 3, 2, str(bid if bid else "No buy orders"))
     safe_addstr(
@@ -136,7 +146,7 @@ def draw_order_book(window, data, height, width):
         str(ask if ask else "No sell orders")
     )
 
-    spread = data["spread"]
+    spread = data.get("spread")
     safe_addstr(
         window, 5, 2,
         f"Spread: {spread if spread is not None else 'N/A'}"
@@ -144,13 +154,13 @@ def draw_order_book(window, data, height, width):
 
 
 def draw_activity(window, data, height, width):
-    """Display live engine activity and latency metrics."""
+    """Display engine activity and latency metrics."""
     safe_addstr(window, 1, 2, "ENGINE ACTIVITY")
 
     activity = data.get("activity", []) + [
-        f"Orders/sec: {data['orders_per_second']:.2f}",
-        f"Latency p50: {data['p50_latency_ns'] or 'N/A'} ns",
-        f"Latency p99: {data['p99_latency_ns'] or 'N/A'} ns",
+        f"Orders/sec: {data.get('orders_per_second', 0):.2f}",
+        f"Latency p50: {data.get('p50_latency_ns') or 'N/A'} ns",
+        f"Latency p99: {data.get('p99_latency_ns') or 'N/A'} ns",
     ]
 
     for index, message in enumerate(activity):
@@ -164,13 +174,16 @@ def draw_status(window, data, height, width):
     """Display engine status and latest trade."""
     safe_addstr(
         window, height - 3, 2,
-        f"Status: {data['engine_status']}"
+        f"Status: {data.get('engine_status', 'UNKNOWN')}"
     )
     safe_addstr(
         window, height - 2, 2,
-        f"Orders/sec: {data['orders_per_second']:.2f}"
+        f"Orders/sec: {data.get('orders_per_second', 0):.2f}"
     )
-    safe_addstr(window, height - 1, 2, data["last_trade"])
+    safe_addstr(
+        window, height - 1, 2,
+        data.get("last_trade", "Last trade: waiting for trade")
+    )
 
 
 def draw(stdscr):
@@ -192,39 +205,38 @@ def draw(stdscr):
         else:
             try:
                 data = get_market_data()
-            except (OSError, ValueError, KeyError) as exc:
-                safe_addstr(
-                    stdscr, 2, 2,
-                    f"Waiting for valid stats.bin: {exc}"
-                )
-                data = None
 
-            if data is not None:
                 draw_order_book(stdscr, data, height // 2, width)
 
                 activity_y = height // 2
                 activity_height = max(3, height - activity_y - 5)
 
-                try:
-                    activity_window = stdscr.derwin(
-                        activity_height, width, activity_y, 0
-                    )
-                    draw_activity(
-                        activity_window, data, activity_height, width
-                    )
-                except curses.error:
-                    pass
+                activity_window = stdscr.derwin(
+                    activity_height, width, activity_y, 0
+                )
+
+                draw_activity(
+                    activity_window, data, activity_height, width
+                )
 
                 safe_addstr(
                     stdscr, height - 4, 2,
                     f"Engine: {data['engine_status']}"
                 )
+
                 draw_status(stdscr, data, height, width)
+
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                safe_addstr(
+                    stdscr, 2, 2,
+                    f"Waiting for valid stats.bin: {error}"
+                )
 
         safe_addstr(
             stdscr, height - 1, max(2, width - 20),
             "Press Q to quit"
         )
+
         stdscr.refresh()
 
         key = stdscr.getch()
@@ -235,10 +247,10 @@ def draw(stdscr):
 
 
 if __name__ == "__main__":
-    if curses is None:
-        print("Install Windows terminal support: python -m pip install windows-curses")
-    else:
-        try:
-            curses.wrapper(draw)
-        except KeyboardInterrupt:
-            pass
+    try:
+        curses.wrapper(draw)
+    except KeyboardInterrupt:
+        pass
+
+
+  
